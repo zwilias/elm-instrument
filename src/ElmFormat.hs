@@ -12,6 +12,7 @@ import CommandLine.Helpers
 import ElmVersion
 import ElmFormat.FileStore (FileStore)
 import ElmFormat.Operation (Operation)
+import Coverage.Transformer as Transformer
 
 import qualified AST.Module
 import qualified Flags
@@ -47,7 +48,9 @@ writeResult elmVersion destination inputFile inputText result =
         Result.Result _ (Result.Ok modu) ->
             let
                 renderedText =
-                    Render.render elmVersion modu
+                    modu
+                        |> Transformer.transform
+                        |> Render.render elmVersion
                 rendered =
                     renderedText
                         |> Text.encodeUtf8
