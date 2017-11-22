@@ -109,18 +109,23 @@ annotation
   -> String
   -> Expression.Expr
   -> State AnnotationStore Expression.Expr
-annotation annotationType moduleName expression@(A region _) = do
-  store <- State.get
-  let (count, store') = registerA annotationType region store
-  State.put store'
+annotation annotationType moduleName body@(A region _) = do
+    store <- State.get
+    let (count, store') = registerA annotationType region store
+    State.put store'
 
-  return $ A region $ Expression.App
-    (toVarRef region annotationType)
-    [ plain $ A region $ Expression.Literal $ AST.Str moduleName False
-    , plain $ A region $ Expression.Literal $ AST.IntNum count AST.DecimalInt
-    , plain expression
-    ]
-    (AST.FAJoinFirst AST.JoinAll)
+    let underscore = A region Pattern.Anything
+    let letBody = A region $ Expression.App
+          (toVarRef region annotationType)
+          [ plain $ A region $ Expression.Literal $ AST.Str moduleName False
+          , plain $ A region $ Expression.Literal $ AST.IntNum count
+                                                               AST.DecimalInt
+          , plain $ A region $ Expression.Unit []
+          ]
+          (AST.FAJoinFirst AST.JoinAll)
+    let letDecl = Expression.LetDefinition underscore [] [] letBody
+
+    return $ A region $ Expression.Let [letDecl] [] body
 
 
 annotateDeclaration
@@ -151,9 +156,7 @@ annotateExpression moduleName expression@(A region expr) = case expr of
   Expression.App inner parts faApp -> do
     parts' <- mapM (annotateCommentedExpression moduleName) parts
     inner' <- annotateExpression moduleName inner
-    annotation Expression moduleName $ A region $ Expression.App inner'
-                                                                 parts'
-                                                                 faApp
+    annotation Expression moduleName $ A region $ Expression.App inner' parts' faApp
 
   Expression.Unary op operand -> do
     operand' <- annotateExpression moduleName operand
