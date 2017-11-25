@@ -63,7 +63,7 @@ transform modul =
 annotate :: String -> Declaration.Decl -> State AnnotationStore Declaration.Decl
 annotate moduleName declaration' = case declaration' of
   Declaration.Decl (A region declaration_) -> do
-    declaration <- annotateDeclaration moduleName declaration_
+    declaration <- annotateDeclaration moduleName region declaration_
     return $ Declaration.Decl $ A region declaration
 
   _ -> return declaration'
@@ -109,9 +109,18 @@ annotation
   -> String
   -> Expression.Expr
   -> State AnnotationStore Expression.Expr
-annotation annotationType moduleName body@(A region _) = do
+annotation annotationType moduleName body@(A region _) =
+  annotationWithRegion annotationType moduleName region body
+
+annotationWithRegion
+  :: Annotation
+  -> String
+  -> Region
+  -> Expression.Expr
+  -> State AnnotationStore Expression.Expr
+annotationWithRegion annotationType moduleName region' body@(A region _) = do
   store <- State.get
-  let (count, store') = registerA annotationType region store
+  let (count, store') = registerA annotationType region' store
   State.put store'
 
   let plainLit   = plain . A region . Expression.Literal
@@ -126,15 +135,18 @@ annotation annotationType moduleName body@(A region _) = do
 
   return $ A region $ Expression.Let [letDecl] [] body
 
-
 annotateDeclaration
   :: String
+  -> Region
   -> Declaration.Declaration
   -> State AnnotationStore Declaration.Declaration
-annotateDeclaration moduleName declaration = case declaration of
+annotateDeclaration moduleName region declaration = case declaration of
   Declaration.Definition pat pats comments body -> do
     annotatedExpressions <- annotateExpression moduleName body
-    annotatedBody <- annotation Declaration moduleName annotatedExpressions
+    annotatedBody        <- annotationWithRegion Declaration
+                                                 moduleName
+                                                 region
+                                                 annotatedExpressions
     return $ Declaration.Definition pat pats comments annotatedBody
 
   _ -> return declaration
@@ -259,7 +271,8 @@ annotateExpression moduleName expression@(A region expr) = case expr of
   Expression.Let decls comments body -> do
     decls' <- mapM (annotateLetDeclaration moduleName) decls
     body'  <- annotateExpression moduleName body
-    return $ A region $ Expression.Let decls' comments body'
+    let letExpr = A region $ Expression.Let decls' comments body'
+    annotation Expression moduleName letExpr
 
   Expression.Access record accessor -> do
     record' <- annotateExpression moduleName record
@@ -267,7 +280,8 @@ annotateExpression moduleName expression@(A region expr) = case expr of
 
   Expression.Lambda pats comments body bool -> do
     body' <-
-      annotateExpression moduleName body >>= annotation LambdaBody moduleName
+      annotateExpression moduleName body
+        >>= annotationWithRegion LambdaBody moduleName region
 
     return $ A region $ Expression.Lambda pats comments body' bool
 
