@@ -13,6 +13,7 @@ import           Control.Monad.State  (State)
 import qualified Control.Monad.State  as State
 import           Data.Int             (Int64)
 import           Data.List            as List
+import qualified Data.List.Split      as List
 import qualified Data.Map.Strict      as Map
 import           Elm.Utils            ((|>))
 import           Reporting.Annotation (Located (..))
@@ -118,22 +119,27 @@ annotationWithRegion
   -> Region
   -> Expression.Expr
   -> State AnnotationStore Expression.Expr
-annotationWithRegion annotationType moduleName region' body@(A region _) = do
-  store <- State.get
-  let (count, store') = registerA annotationType region' store
-  State.put store'
+annotationWithRegion annotationType moduleName region' body@(A region body') =
+  do
+    store <- State.get
+    let (count, store') = registerA annotationType region' store
+    State.put store'
 
-  let plainLit   = plain . A region . Expression.Literal
-  let underscore = A region Pattern.Anything
-  let letBody = A region $ Expression.App
-        (toVarRef region annotationType)
-        [ plainLit $ AST.Str moduleName False
-        , plainLit $ AST.IntNum count AST.DecimalInt
-        ]
-        (AST.FAJoinFirst AST.JoinAll)
-  let letDecl = Expression.LetDefinition underscore [] [] letBody
+    let plainLit   = plain . A region . Expression.Literal
+    let underscore = A region Pattern.Anything
+    let letBody = A region $ Expression.App
+          (toVarRef region annotationType)
+          [ plainLit $ AST.Str moduleName False
+          , plainLit $ AST.IntNum count AST.DecimalInt
+          ]
+          (AST.FAJoinFirst AST.JoinAll)
+    let letDecl = Expression.LetDefinition underscore [] [] letBody
 
-  return $ A region $ Expression.Let [letDecl] [] body
+    return $ case body' of
+      Expression.Let letDecls comments expr ->
+        A region $ Expression.Let (letDecl : letDecls) comments expr
+      _ -> A region $ Expression.Let [letDecl] [] body
+
 
 annotateDeclaration
   :: String
@@ -384,11 +390,23 @@ annotationTypeStoreToPair name store = AST.Pair
 
 regionsToIdentifiers :: [Region] -> Expression.Expr
 regionsToIdentifiers regions =
-  let identifiers =
-        List.foldl' (\acc region -> regionToRecord region : acc) [] regions
-  in  A emptyRegion $ Expression.ExplicitList (toSequence identifiers)
-                                              []
-                                              (AST.ForceMultiline True)
+  let identifiers :: [[Expression.Expr]]
+      identifiers = List.chunksOf 200
+        $ List.foldl' (\acc region -> regionToRecord region : acc) [] regions
+
+      concatRef :: Var.Ref
+      concatRef = Var.OpRef $ AST.SymbolIdentifier "++"
+
+      listExpr :: [Expression.Expr] -> Located Expression.Expr'
+      listExpr xs = A emptyRegion
+        $ Expression.ExplicitList (toSequence xs) [] (AST.ForceMultiline True)
+  in  case identifiers of
+        []   -> listExpr []
+        [x]  -> listExpr x
+        x:xs -> A emptyRegion $ Expression.Binops
+          (listExpr x)
+          (List.map (\x' -> ([], concatRef, [], listExpr x')) xs)
+          True
 
 
 toSequence :: [a] -> AST.Sequence a
