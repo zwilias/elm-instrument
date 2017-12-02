@@ -1,4 +1,4 @@
-Name: elm-coverage
+Name: elm-instrument
 version: 0.0.1
 
 Synopsis:
@@ -132,7 +132,7 @@ library
         text >= 1.2.2.1 && < 2
 
 
-executable elm-coverage
+executable elm-instrument
 
     ghc-options:
         -threaded -O2 -Wall -Wno-name-shadowing
@@ -145,7 +145,7 @@ executable elm-coverage
 
     build-depends:
         base >= 4.9.0.0 && < 5,
-        elm-coverage
+        elm-instrument
 
 test-Suite elm-format-tests
     type:
