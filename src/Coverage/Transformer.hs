@@ -18,7 +18,6 @@ import qualified Data.Map.Strict      as Map
 import           Elm.Utils            ((|>))
 import           Reporting.Annotation (Located (..))
 import           Reporting.Region
--- import Debug.Trace as Debug
 
 
 transform :: M.Module -> M.Module
@@ -71,8 +70,7 @@ annotate moduleName declaration' = case declaration' of
 
 
 data Annotation
-  = Expression
-  | Declaration
+  = Declaration
   | CaseBranch
   | IfElseBranch
   | LambdaBody
@@ -88,8 +86,6 @@ toVarRef region ann =
         [AST.UppercaseIdentifier "Coverage"]
         (AST.LowercaseIdentifier name)
   in  case ann of
-        Expression     -> identifier "expression"
-
         Declaration    -> identifier "declaration"
 
         CaseBranch     -> identifier "caseBranch"
@@ -106,23 +102,26 @@ plain a = ([], a)
 
 
 annotation
-  :: Annotation
+  :: Registerer
+  -> Annotation
   -> String
   -> Expression.Expr
   -> State AnnotationStore Expression.Expr
-annotation annotationType moduleName body@(A region _) =
-  annotationWithRegion annotationType moduleName region body
+annotation registerer annotationType moduleName body@(A region _) =
+  annotationWithRegion registerer annotationType moduleName region body
+
 
 annotationWithRegion
-  :: Annotation
+  :: Registerer
+  -> Annotation
   -> String
   -> Region
   -> Expression.Expr
   -> State AnnotationStore Expression.Expr
-annotationWithRegion annotationType moduleName region' body@(A region body') =
-  do
+annotationWithRegion registerer annotationType moduleName region' body@(A region body')
+  = do
     store <- State.get
-    let (count, store') = registerA annotationType region' store
+    let (count, store') = registerer region' store
     State.put store'
 
     let plainLit   = plain . A region . Expression.Literal
@@ -147,16 +146,25 @@ annotateDeclaration
   -> Declaration.Declaration
   -> State AnnotationStore Declaration.Declaration
 annotateDeclaration moduleName region declaration = case declaration of
-  Declaration.Definition pat pats comments body -> do
+  Declaration.Definition pat@(A _ patName) pats comments body -> do
+    resetComplexity
     annotatedExpressions <- annotateExpression moduleName body
-    annotatedBody        <- annotationWithRegion Declaration
-                                                 moduleName
-                                                 region
-                                                 annotatedExpressions
+    complexity           <- State.gets current
+    annotatedBody        <- annotationWithRegion
+      (registerDeclaration (patternToName patName) complexity)
+      Declaration
+      moduleName
+      region
+      annotatedExpressions
     return $ Declaration.Definition pat pats comments annotatedBody
 
   _ -> return declaration
 
+
+patternToName :: Pattern.Pattern' -> String
+patternToName pat = case pat of
+  Pattern.VarPattern (AST.LowercaseIdentifier name) -> name
+  _ -> ""
 
 annotateCommentedExpression
   :: String
@@ -173,9 +181,7 @@ annotateExpression moduleName expression@(A region expr) = case expr of
   Expression.App inner parts faApp -> do
     parts' <- mapM (annotateCommentedExpression moduleName) parts
     inner' <- annotateExpression moduleName inner
-    annotation Expression moduleName $ A region $ Expression.App inner'
-                                                                 parts'
-                                                                 faApp
+    return $ A region $ Expression.App inner' parts' faApp
 
   Expression.Unary op operand -> do
     operand' <- annotateExpression moduleName operand
@@ -193,9 +199,7 @@ annotateExpression moduleName expression@(A region expr) = case expr of
         return (comments, ref, moreComments, e')
       )
       content
-    annotation Expression moduleName $ A region $ Expression.Binops first'
-                                                                    content'
-                                                                    bool
+    return $ A region $ Expression.Binops first' content' bool
 
   Expression.ExplicitList terms trailingComments forceMultiline -> do
     terms' <- mapM
@@ -222,15 +226,20 @@ annotateExpression moduleName expression@(A region expr) = case expr of
     of_'      <- annotateExpression moduleName of_
     patterns' <- mapM
       ( \(pat, (comments, body)) -> do
+        incrementComplexity -- Every branch increases the complexity
         body'  <- annotateExpression moduleName body
-        body'' <- annotation CaseBranch moduleName body'
+        body'' <- annotation registerCaseBranch CaseBranch moduleName body'
         return (pat, (comments, body''))
       )
       patterns
-
-    let caseOf = A region
-          $ Expression.Case (AST.Commented preOf of_' postOf, flag) patterns'
-    annotation Expression moduleName caseOf
+    decrementComplexity -- However, the total complexity of a `case..of` is the
+                                                           -- number of branches
+                                                           -- - 1. Why, you ask?
+                                                           -- Same reason `else`
+                                                           -- doesn't add
+                                                           -- complexity. Also, reasons.
+    pure $ A region $ Expression.Case (AST.Commented preOf of_' postOf, flag)
+                                      patterns'
 
   Expression.If ifClause otherClauses (comments, elseExpr) ->
     let
@@ -238,9 +247,13 @@ annotateExpression moduleName expression@(A region expr) = case expr of
         :: Expression.IfClause -> State AnnotationStore Expression.IfClause
       annotateIfClause (AST.Commented preCond cond postCond, AST.Commented preBody body postBody)
         = do
+          incrementComplexity
           cond'  <- annotateExpression moduleName cond
           body'  <- annotateExpression moduleName body
-          body'' <- annotation IfElseBranch moduleName body'
+          body'' <- annotation registerIfElseBranch
+                               IfElseBranch
+                               moduleName
+                               body'
 
           return
             ( AST.Commented preCond cond'  postCond
@@ -257,12 +270,11 @@ annotateExpression moduleName expression@(A region expr) = case expr of
           otherClauses
         elseExpr' <-
           annotateExpression moduleName elseExpr
-            >>= annotation IfElseBranch moduleName
+            >>= annotation registerIfElseBranch IfElseBranch moduleName
 
-        annotation Expression moduleName $ A region $ Expression.If
-          ifClause'
-          otherClauses'
-          (comments, elseExpr')
+        pure $ A region $ Expression.If ifClause'
+                                        otherClauses'
+                                        (comments, elseExpr')
 
   Expression.Tuple entries bool -> do
     entries' <- mapM
@@ -277,19 +289,24 @@ annotateExpression moduleName expression@(A region expr) = case expr of
   Expression.Let decls comments body -> do
     decls' <- mapM (annotateLetDeclaration moduleName) decls
     body'  <- annotateExpression moduleName body
-    let letExpr = A region $ Expression.Let decls' comments body'
-    annotation Expression moduleName letExpr
+
+    pure $ A region $ Expression.Let decls' comments body'
 
   Expression.Access record accessor -> do
     record' <- annotateExpression moduleName record
     return $ A region $ Expression.Access record' accessor
 
   Expression.Lambda pats comments body bool -> do
-    body' <-
-      annotateExpression moduleName body
-        >>= annotationWithRegion LambdaBody moduleName region
+    innerComplexity
+    body'          <- annotateExpression moduleName body
+    bodyComplexity <- popComplexity
+    body''         <- annotationWithRegion (registerLambdaBody bodyComplexity)
+                                           LambdaBody
+                                           moduleName
+                                           region
+                                           body'
 
-    return $ A region $ Expression.Lambda pats comments body' bool
+    pure $ A region $ Expression.Lambda pats comments body'' bool
 
   Expression.Record base fields trailingComments forceMultiline -> do
     fields' <- mapM
@@ -299,22 +316,14 @@ annotateExpression moduleName expression@(A region expr) = case expr of
       )
       fields
 
-    let record = A region
-          $ Expression.Record base fields' trailingComments forceMultiline
+    return $ A region $ Expression.Record base
+                                          fields'
+                                          trailingComments
+                                          forceMultiline
 
-    case base of
-      Just _ -> annotation Expression moduleName record
-      _      -> return record
+  Expression.Literal        _ -> return expression
 
-  Expression.Literal _ ->
-      -- TODO: gotta draw a line somewhere. Expression or not?
-      -- annotation Expression moduleName expression
-    return expression
-
-  Expression.VarExpr _ ->
-      -- TODO: should this really "count" as an expression?
-      -- annotation Expression moduleName expression
-    return expression
+  Expression.VarExpr        _ -> return expression
 
   Expression.TupleFunction  _ -> return expression
 
@@ -330,12 +339,20 @@ annotateLetDeclaration
   -> Expression.LetDeclaration
   -> State AnnotationStore Expression.LetDeclaration
 annotateLetDeclaration moduleName decl = case decl of
-  Expression.LetDefinition pat pats comments expression -> do
-    expression' <-
-      annotateExpression moduleName expression
-        >>= annotation LetDeclaration moduleName
+  Expression.LetDefinition pat@(A patRegion _) pats comments expression@(A expRegion _)
+    -> do
+      innerComplexity
+      let letRegion = Region (start patRegion) (end expRegion)
+      expression'    <- annotateExpression moduleName expression
+      bodyComplexity <- popComplexity
+      expression''   <- annotationWithRegion
+        (registerletDeclaration bodyComplexity)
+        LetDeclaration
+        moduleName
+        letRegion
+        expression'
 
-    return $ Expression.LetDefinition pat pats comments expression'
+      return $ Expression.LetDefinition pat pats comments expression''
   _ -> return decl
 
 
@@ -351,48 +368,83 @@ initCoverageDeclaration moduleName store =
 
 
 initCoverageBody :: String -> AnnotationStore -> Expression.Expr
-initCoverageBody moduleName store = A emptyRegion $ Expression.App
-  ( A emptyRegion $ Expression.VarExpr $ Var.VarRef
-    [AST.UppercaseIdentifier "Coverage"]
-    (AST.LowercaseIdentifier "init")
-  )
-  [ ([], A emptyRegion $ Expression.Literal $ AST.Str moduleName False)
-  , ([], annotationStoreToRecord store)
-  ]
-  AST.FASplitFirst
+initCoverageBody moduleName store =
+  let (complexitySum, complexityCount) = List.foldl'
+        (\(total, count) c -> (total + extractComplexity c, count + 1))
+        (0, 0)
+        (complexity store)
+  in  A emptyRegion $ Expression.App
+        ( A emptyRegion $ Expression.VarExpr $ Var.VarRef
+          [AST.UppercaseIdentifier "Coverage"]
+          (AST.LowercaseIdentifier "init")
+        )
+        [ ( []
+          , A emptyRegion $ Expression.Literal $ AST.IntNum
+            (fromIntegral (complexitySum - complexityCount + 1))
+            AST.DecimalInt
+          )
+        , ([], A emptyRegion $ Expression.Literal $ AST.Str moduleName False)
+        , ([], annotationStoreToRecord store)
+        ]
+        AST.FASplitFirst
 
 
 annotationStoreToRecord :: AnnotationStore -> Expression.Expr
 annotationStoreToRecord store = A emptyRegion $ Expression.Record
   Nothing
   ( toSequence
-    [ annotationTypeStoreToPair "expressions"     (expressions store)
-    , annotationTypeStoreToPair "caseBranches"    (caseBranches store)
-    , annotationTypeStoreToPair "declarations"    (declarations store)
-    , annotationTypeStoreToPair "ifElseBranches"  (ifElseBranches store)
-    , annotationTypeStoreToPair "lambdaBodies"    (lambdaBodies store)
-    , annotationTypeStoreToPair "letDeclarations" (letDeclarations store)
+    [ annotationTypeStoreToPairN "caseBranches"    (caseBranches store)
+    , annotationTypeStoreToPairD "declarations"    (declarations store)
+    , annotationTypeStoreToPairN "ifElseBranches"  (ifElseBranches store)
+    , annotationTypeStoreToPairC "lambdaBodies"    (lambdaBodies store)
+    , annotationTypeStoreToPairC "letDeclarations" (letDeclarations store)
     ]
   )
   []
   (AST.ForceMultiline True)
 
 
+annotationTypeStoreToPairN
+  :: String
+  -> AnnotationTypeStore a
+  -> AST.Pair AST.LowercaseIdentifier Expression.Expr
+annotationTypeStoreToPairN name store =
+  annotationTypeStoreToPair name store (regionsToIdentifiers regionToRecord)
+
+
+annotationTypeStoreToPairC
+  :: String
+  -> AnnotationTypeStore Int
+  -> AST.Pair AST.LowercaseIdentifier Expression.Expr
+annotationTypeStoreToPairC name store =
+  annotationTypeStoreToPair name store (regionsToIdentifiers regionToRecordC)
+
+
+annotationTypeStoreToPairD
+  :: String
+  -> AnnotationTypeStore (String, Int)
+  -> AST.Pair AST.LowercaseIdentifier Expression.Expr
+annotationTypeStoreToPairD name store =
+  annotationTypeStoreToPair name store (regionsToIdentifiers regionToRecordD)
+
+
 annotationTypeStoreToPair
   :: String
-  -> AnnotationTypeStore
+  -> AnnotationTypeStore a
+  -> ([(Region, a)] -> Expression.Expr)
   -> AST.Pair AST.LowercaseIdentifier Expression.Expr
-annotationTypeStoreToPair name store = AST.Pair
+annotationTypeStoreToPair name store handleRegions = AST.Pair
   (AST.LowercaseIdentifier name, [])
-  ([]                          , regionsToIdentifiers $ regions store)
+  ([]                          , handleRegions $ regions store)
   (AST.ForceMultiline False)
 
 
-regionsToIdentifiers :: [Region] -> Expression.Expr
-regionsToIdentifiers regions =
+regionsToIdentifiers
+  :: (a -> Region -> Expression.Expr) -> [(Region, a)] -> Expression.Expr
+regionsToIdentifiers toRecord regions =
   let identifiers :: [[Expression.Expr]]
       identifiers = List.chunksOf 200
-        $ List.foldl' (\acc region -> regionToRecord region : acc) [] regions
+        $ List.foldl' (\acc (region, a) -> toRecord a region : acc) [] regions
 
       concatRef :: Var.Ref
       concatRef = Var.OpRef $ AST.SymbolIdentifier "++"
@@ -413,8 +465,8 @@ toSequence :: [a] -> AST.Sequence a
 toSequence = List.map (\item -> ([], ([], (item, Nothing))))
 
 
-regionToRecord :: Region -> Expression.Expr
-regionToRecord Region { start, end } =
+regionToRecord :: a -> Region -> Expression.Expr
+regionToRecord _ Region { start, end } =
   let ctor :: Expression.Expr
       ctor = A emptyRegion $ Expression.VarExpr $ Var.TagRef
         [AST.UppercaseIdentifier "Coverage"]
@@ -425,95 +477,174 @@ regionToRecord Region { start, end } =
         (AST.FAJoinFirst AST.JoinAll)
 
 
+regionToRecordC :: Int -> Region -> Expression.Expr
+regionToRecordC c Region { start, end } =
+  let ctor :: Expression.Expr
+      ctor = A emptyRegion $ Expression.VarExpr $ Var.TagRef
+        [AST.UppercaseIdentifier "Coverage"]
+        (AST.UppercaseIdentifier "IdentifierC")
+  in  A emptyRegion $ Expression.App
+        ctor
+        [ ( []
+          , A emptyRegion $ Expression.Literal $ AST.IntNum (fromIntegral c)
+                                                            AST.DecimalInt
+          )
+        , ([], positionToTuple start)
+        , ([], positionToTuple end)
+        ]
+        (AST.FAJoinFirst AST.JoinAll)
+
+
+regionToRecordD :: (String, Int) -> Region -> Expression.Expr
+regionToRecordD (name, c) Region { start, end } =
+  let ctor :: Expression.Expr
+      ctor = A emptyRegion $ Expression.VarExpr $ Var.TagRef
+        [AST.UppercaseIdentifier "Coverage"]
+        (AST.UppercaseIdentifier "IdentifierD")
+  in  A emptyRegion $ Expression.App
+        ctor
+        [ ([], A emptyRegion $ Expression.Literal $ AST.Str (name) False)
+        , ( []
+          , A emptyRegion $ Expression.Literal $ AST.IntNum (fromIntegral c)
+                                                            AST.DecimalInt
+          )
+        , ([], positionToTuple start)
+        , ([], positionToTuple end)
+        ]
+        (AST.FAJoinFirst AST.JoinAll)
+
+
+
 positionToTuple :: Position -> Expression.Expr
-positionToTuple Position { line, column } = A emptyRegion $ Expression.Tuple
-  [ AST.Commented
-    []
-    ( A emptyRegion
-        (Expression.Literal $ AST.IntNum (fromIntegral line) AST.DecimalInt)
-    )
-    []
-  , AST.Commented
-    []
-    ( A emptyRegion
-        (Expression.Literal $ AST.IntNum (fromIntegral column) AST.DecimalInt)
-    )
-    []
-  ]
-  False
+positionToTuple Position { line, column } =
+  let toLit :: Int -> Expression.Expr'
+      toLit v = Expression.Literal $ AST.IntNum (fromIntegral v) AST.DecimalInt
+  in  A emptyRegion $ Expression.Tuple
+        [ AST.Commented [] (A emptyRegion $ toLit line)   []
+        , AST.Commented [] (A emptyRegion $ toLit column) []
+        ]
+        False
 
 
-data AnnotationTypeStore = AnnotationTypeStore
-  { regions :: [Region]
+data AnnotationTypeStore a = AnnotationTypeStore
+  { regions :: [(Region, a)]
   , counter :: Int64
   }
 
 
+data Complexity
+    = DeclarationComplexity Region String Int
+    | LambdaComplexity Region Int
+    | LetDeclarationComplexity Region Int
+
+
+extractComplexity :: Complexity -> Int
+extractComplexity c = case c of
+  DeclarationComplexity _ _ v  -> v
+  LambdaComplexity         _ v -> v
+  LetDeclarationComplexity _ v -> v
+
+
+incrementComplexity :: State AnnotationStore ()
+incrementComplexity =
+  State.modify (\store -> store { current = 1 + current store })
+
+
+decrementComplexity :: State AnnotationStore ()
+decrementComplexity =
+  State.modify (\store -> store { current = current store - 1 })
+
+
+resetComplexity :: State AnnotationStore ()
+resetComplexity = State.modify (\store -> store { current = 1 })
+
+
+innerComplexity :: State AnnotationStore ()
+innerComplexity = State.modify
+  (\store -> store { current = 0, stack = current store : stack store })
+
+
+popComplexity :: State AnnotationStore Int
+popComplexity = do
+  inner <- State.gets current
+  State.modify
+    ( \store -> store { current = inner + (head $ stack store)
+                      , stack   = tail $ stack store
+                      }
+    )
+  return inner
+
+
 data AnnotationStore = AnnotationStore
-  { expressions     :: AnnotationTypeStore
-  , declarations    :: AnnotationTypeStore
-  , caseBranches    :: AnnotationTypeStore
-  , ifElseBranches  :: AnnotationTypeStore
-  , lambdaBodies    :: AnnotationTypeStore
-  , letDeclarations :: AnnotationTypeStore
+  { declarations    :: AnnotationTypeStore (String, Int)
+  , caseBranches    :: AnnotationTypeStore ()
+  , ifElseBranches  :: AnnotationTypeStore ()
+  , lambdaBodies    :: AnnotationTypeStore Int
+  , letDeclarations :: AnnotationTypeStore Int
+  , complexity      :: [ Complexity ]
+  , current         :: Int
+  , stack           :: [ Int ]
   }
 
 
-register :: Region -> AnnotationTypeStore -> (Int64, AnnotationTypeStore)
-register region store =
-  ( counter store
-  , store { regions = region : regions store, counter = counter store + 1 }
-  )
-
-
-registerA :: Annotation -> Region -> AnnotationStore -> (Int64, AnnotationStore)
-registerA ann = case ann of
-  Expression     -> registerExpression
-
-  Declaration    -> registerDeclaration
-
-  CaseBranch     -> registerCaseBranch
-
-  IfElseBranch   -> registerIfElseBranch
-
-  LambdaBody     -> registerLambdaBody
-
-  LetDeclaration -> registerletDeclaration
-
-
-registerExpression :: Region -> AnnotationStore -> (Int64, AnnotationStore)
-registerExpression region store =
-  let (i, newExpressions) = register region $ expressions store
-  in  (i, store { expressions = newExpressions })
+type Registerer = Region -> AnnotationStore -> (Int64, AnnotationStore)
 
 
 registerCaseBranch :: Region -> AnnotationStore -> (Int64, AnnotationStore)
 registerCaseBranch region store =
-  let (i, newBranches) = register region $ caseBranches store
+  let (i, newBranches) = register_ () region $ caseBranches store
   in  (i, store { caseBranches = newBranches })
 
 
 registerIfElseBranch :: Region -> AnnotationStore -> (Int64, AnnotationStore)
 registerIfElseBranch region store =
-  let (i, newBranches) = register region $ ifElseBranches store
+  let (i, newBranches) = register_ () region $ ifElseBranches store
   in  (i, store { ifElseBranches = newBranches })
 
 
-registerDeclaration :: Region -> AnnotationStore -> (Int64, AnnotationStore)
-registerDeclaration region store =
-  let (i, newDeclarations) = register region $ declarations store
-  in  (i, store { declarations = newDeclarations })
+registerDeclaration
+  :: String -> Int -> Region -> AnnotationStore -> (Int64, AnnotationStore)
+registerDeclaration name compl region store =
+  let (i, newDeclarations) =
+        register_ (name, compl) region $ declarations store
+  in  ( i
+      , store
+        { declarations = newDeclarations
+        , complexity   = DeclarationComplexity region name compl
+          : complexity store
+        }
+      )
 
-registerLambdaBody :: Region -> AnnotationStore -> (Int64, AnnotationStore)
-registerLambdaBody region store =
-  let (i, newLambdas) = register region $ lambdaBodies store
-  in  (i, store { lambdaBodies = newLambdas })
+
+registerLambdaBody
+  :: Int -> Region -> AnnotationStore -> (Int64, AnnotationStore)
+registerLambdaBody a region store =
+  let (i, newLambdas) = register_ a region $ lambdaBodies store
+  in  ( i
+      , store { lambdaBodies = newLambdas
+              , complexity   = LambdaComplexity region a : complexity store
+              }
+      )
 
 
-registerletDeclaration :: Region -> AnnotationStore -> (Int64, AnnotationStore)
-registerletDeclaration region store =
-  let (i, newDecls) = register region $ letDeclarations store
-  in  (i, store { letDeclarations = newDecls })
+registerletDeclaration
+  :: Int -> Region -> AnnotationStore -> (Int64, AnnotationStore)
+registerletDeclaration a region store =
+  let (i, newDecls) = register_ a region $ letDeclarations store
+  in  ( i
+      , store
+        { letDeclarations = newDecls
+        , complexity      = LetDeclarationComplexity region a : complexity store
+        }
+      )
+
+
+register_
+  :: a -> Region -> AnnotationTypeStore a -> (Int64, AnnotationTypeStore a)
+register_ a region store =
+  ( counter store
+  , store { regions = (region, a) : regions store, counter = counter store + 1 }
+  )
 
 
 emptyStore :: AnnotationStore
@@ -523,10 +654,12 @@ emptyStore =
         , counter = 0
         }
   in  AnnotationStore
-        { expressions     = emptyTypeStore
-        , declarations    = emptyTypeStore
+        { declarations    = emptyTypeStore
         , caseBranches    = emptyTypeStore
         , ifElseBranches  = emptyTypeStore
         , lambdaBodies    = emptyTypeStore
         , letDeclarations = emptyTypeStore
+        , complexity      = []
+        , current         = 1
+        , stack           = []
         }
