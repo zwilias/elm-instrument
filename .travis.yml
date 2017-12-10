@@ -9,6 +9,11 @@ cache:
   - $HOME/.stack
 
 
+env:
+  global:
+    secure: QppCuw+mtOpPR8HDFkImDEgygYOjXgEMttf+H+HMbssSUcFNIgrUR5k8P4PH2aIC6JnM0CwysPD6r2ts8kTFRwWZL1PpSHy3WVcaAqMGhIxsOrQhIFNK5Jqcli562SMccBReklOQv2OCXAeYXmkiqspsnq1G26GOpGPFCcTBzz3Npk4ImAJLYlfDX7sRoDSaXzTM/Uq1Ut0x8TfOkcyDm4Br0EHMK4Mv0hLa/uSKM4P9U9bhK90Y7piqVZNpo7Udnk/lFEkLXhwEnJnCfLUVv9eVBQvtHKKGYWmXDYzPCCwNSaXe6OqjE87uBYYvpDcpsUCF33ps9FojqrAnGu/H9shQLrxU9/vnAaExXOKjTBIvSDxEahiUDJWUAl9EKIiRF38d4I4/z90QDrGz2CAmh4Yf6/GgtTtTWmJsbw6DJ+I8LgmLydu5hEqGet5MWRS1u5YHgjrJtWIa8L3hEKFrWMqWTk3FsZQohtdAKwjWMBDoITk9sFudZOkEHZTlNXWQ3aXguSF4qxS71IlDUJD/eISAioRVEvVz4RSJ1Dcb94fet/N0tGKmumoOwbbe9M5sh/orpzHaa+xVjzEXPn1+r3EcR55hJ5nzbGLlrd5r3hh9UPzRc1TGJPYBTlrbsZezXu5oO5D14mLuXzM50gxyD/XoT5So8EmZbNkzfZoustg=
+
+
 addons:
   apt:
     packages:
@@ -29,4 +34,8 @@ install:
 
 script:
 - stack build
-- ./tests/run-tests.sh
+
+
+deploy:
+  provider: script
+  script: deploy.sh $BINTRAY_TOKEN
