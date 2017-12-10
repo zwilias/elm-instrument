@@ -1,5 +1,5 @@
 Name: elm-instrument
-version: 0.0.2
+version: 0.0.3
 
 Synopsis:
     A source code formatter for Elm
@@ -81,7 +81,7 @@ library
         Util.List
 
     other-modules:
-        Build_elm_format
+        Build_elm_instrument
         Cheapskate.Inlines
         Cheapskate.Parse
         Cheapskate.ParserCombinators
@@ -99,7 +99,7 @@ library
         Messages.Formatter.Json
         Messages.Strings
         Messages.Types
-        Paths_elm_format
+        -- Paths_elm_format
         Parse.Binop
         Parse.Common
         Parse.Comments
