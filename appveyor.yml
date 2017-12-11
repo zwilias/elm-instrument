@@ -3,7 +3,7 @@ build: off
 
 environment:
   global:
-    STACK_ROOT: 'c\sr'
+    STACK_ROOT: 'c:\sr'
     
   matrix:
     - platform: x86
