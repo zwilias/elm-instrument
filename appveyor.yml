@@ -1,30 +1,47 @@
 build: off
 
-platform: x86
 
-cache:
-- 'c:\sr'
-- 'C:\Users\appveyor\AppData\Local\Programs\stack'
-
-before_test:
-# workaround for https://github.com/appveyor/ci/issues/1426
-- set PATH=%PATH%;C:\Program Files\Git\mingw64\bin
-- curl -sS -ostack.zip -L --insecure http://www.stackage.org/stack/windows-i386
-- 7z x stack.zip stack.exe
-
-clone_folder: 'c:\stack'
 environment:
   global:
-    STACK_ROOT: 'c:\sr'
+    STACK_ROOT: 'c\sr'
+    
+  matrix:
+    - platform: x86
+      stackUrl: http://www.stackage.org/stack/windows-i386
+      tarName: 'dist\win32-ia32.tar.gz'
+
+    - platform: x64
+      stackUrl: http://www.stackage.org/stack/window-x86_64
+      tarName: 'dist\win32-x64.tar.gz'
+
+
+cache:
+  - 'c:\sr'
+  - 'C:\Users\appveyor\AppData\Local\Programs\stack'
+
+
+before_test:
+  # workaround for https://github.com/appveyor/ci/issues/1426
+  - set PATH=%PATH%;C:\Program Files\Git\mingw64\bin
+  - curl -sS -ostack.zip -L --insecure ${stackUrl}
+  - 7z x stack.zip stack.exe
+
+
+clone_folder: 'c:\stack'
+
 
 test_script:
-- "set PATH=%PATH%;c:\\stack"
-- stack setup > nil
-- stack path
-- stack build
-- bash tests/run-tests.sh
-- mkdir -p dist
-- stack install --local-bin-path=dist
+  - "set PATH=%PATH%;c:\\stack"
+  - stack setup > nil
+  - stack path
+  - stack build
+  - mkdir -p dist
+  - stack install --local-bin-path=dist
+
+
+before_deploy:
+  - 7z a -tgzip ${tarName} 'dist\elm-instrument'
 
 artifacts:
-- path: 'dist\elm-format-0.18.exe'
+  - path: ${tarName}
+

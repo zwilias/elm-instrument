@@ -43,7 +43,8 @@ script:
 
 
 before_deploy:
-   - tar zcvf "${TRAVIS_OS_NAME}.tar.gz" $(stack path --local-install-root)/bin/elm-instrument 
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then strip $(stack path --local-install-root)/bin/elm-instrument; fi
+  - tar zcvf "${TRAVIS_OS_NAME}.tar.gz" $(stack path --local-install-root)/bin/elm-instrument 
 
 
 deploy:
@@ -56,4 +57,5 @@ deploy:
   draft: true
   on:
     repo: zwilias/elm-instrument
+    tag: true
     
