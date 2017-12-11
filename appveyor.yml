@@ -40,7 +40,7 @@ test_script:
 
 
 after_test:
-  - 7z a -tgzip %tarName% 'dist\elm-instrument.exe'
+  - 7z a -tgzip %tarName% 'C:\stack\dist\elm-instrument.exe'
 
 
 artifacts:
