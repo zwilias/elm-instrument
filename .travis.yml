@@ -6,12 +6,12 @@ language: c
 
 cache:
   directories:
-  - $HOME/.stack
+  - "$HOME/.stack"
 
 
-env:
-  global:
-    secure: QppCuw+mtOpPR8HDFkImDEgygYOjXgEMttf+H+HMbssSUcFNIgrUR5k8P4PH2aIC6JnM0CwysPD6r2ts8kTFRwWZL1PpSHy3WVcaAqMGhIxsOrQhIFNK5Jqcli562SMccBReklOQv2OCXAeYXmkiqspsnq1G26GOpGPFCcTBzz3Npk4ImAJLYlfDX7sRoDSaXzTM/Uq1Ut0x8TfOkcyDm4Br0EHMK4Mv0hLa/uSKM4P9U9bhK90Y7piqVZNpo7Udnk/lFEkLXhwEnJnCfLUVv9eVBQvtHKKGYWmXDYzPCCwNSaXe6OqjE87uBYYvpDcpsUCF33ps9FojqrAnGu/H9shQLrxU9/vnAaExXOKjTBIvSDxEahiUDJWUAl9EKIiRF38d4I4/z90QDrGz2CAmh4Yf6/GgtTtTWmJsbw6DJ+I8LgmLydu5hEqGet5MWRS1u5YHgjrJtWIa8L3hEKFrWMqWTk3FsZQohtdAKwjWMBDoITk9sFudZOkEHZTlNXWQ3aXguSF4qxS71IlDUJD/eISAioRVEvVz4RSJ1Dcb94fet/N0tGKmumoOwbbe9M5sh/orpzHaa+xVjzEXPn1+r3EcR55hJ5nzbGLlrd5r3hh9UPzRc1TGJPYBTlrbsZezXu5oO5D14mLuXzM50gxyD/XoT5So8EmZbNkzfZoustg=
+os:
+  - linux
+  - osx
 
 
 addons:
@@ -21,22 +21,33 @@ addons:
 
 
 before_install:
-- mkdir -p ~/.local/bin
-- export PATH=$HOME/.local/bin:$PATH
-- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-- stack --version
+  - mkdir -p ~/.local/bin
+  - export PATH=$HOME/.local/bin:$PATH
+  - travis_retry curl -L "https://www.stackage.org/stack/${TRAVIS_OS_NAME}-x86_64" | tar xz --wildcards
+    --strip-components=1 -C ~/.local/bin '*/stack'
+  - stack --version
 
 
 install:
-- stack setup
-- stack build --only-dependencies
+  - stack setup
+  - stack build --only-dependencies
 
 
 script:
-- stack build
+  - stack build
+
+
+before_deploy:
+   - tar zcvf "${TRAVIS_OS_NAME}.tar.gz" $(stack path --local-install-root)/bin/elm-instrument 
 
 
 deploy:
-  provider: script
-  script: ./deploy.sh $BINTRAY_TOKEN
+  provider: releases
+  api_key:
+    secure: ZMf3BRr91zTYRKiZArCBJ9lyJG2W33LKM25tlvSpMDi2kBSUqvpYyRnZKiod1eQJ8O2Av8bRPE2fc4stJMfRxsqVE0U5G1I6Md9UDPVxSAYq1Jfr9yTqIfHEOY+P9ePFo2wOqsMEqpWppkaSuE2WcW61YtN32GeXaizuOKE1Fz+j6wY8HvOcAH9Rf29SI8wZhCTp8tTxvQkYy9ICpbZMWZNaJVrsmHpO7Ob0Yy5Y93QQGnvgPrSGkYu0p0hgec45LGh1UucKb0i/D6to8+Fun2Md4Z08DoBJf8bOnJjNtDv06vviq13x20mm0/zcBELy/PkpducgqWtvZ+inJ4+xcEGTn1qD968EfhqAijpcXfLDHLpQ5ooss7XTDb2sWcdmC5eE/dzCkUE0KUnIPJjxy/XEPHX8xrhsHueng0PzoeN7Iom3ZLOqEwcl6L6WldULasSOf/Cl/t8Yy+zYpVLJI91qz6RRhWAbRsTgDuM9yyMlwZmiv2WaalXDzLP8NqHZItmW7WngYb0hVFD0w/ly4pTsK+0VJ9HlCJD8RM7bESgrj61YNdrkLTwG+UkumIpCbgvDnmP6nTus86a5T2k4bgBIT2kA77xi4bUHJbF0ba3JiaK0ZZ5OzckH/b7zHlpsqAR+S5eeEnWiUvXH/THRELAE/JYjjbGFYUEEPQIf0/Y=
   skip_cleanup: true
+  file: "${TRAVIS_OS_NAME}.tar.gz"
+  name: $(git describe --abbrev=8 --always)
+  draft: true
+  on:
+    repo: zwilias/elm-instrument
