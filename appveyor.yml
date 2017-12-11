@@ -8,11 +8,11 @@ environment:
   matrix:
     - platform: x86
       stackUrl: http://www.stackage.org/stack/windows-i386
-      tarName: 'dist\win32-ia32.tar.gz'
+      tarName: 'dist\windows-ia32.tar.gz'
 
     - platform: x64
       stackUrl: http://www.stackage.org/stack/windows-x86_64
-      tarName: 'dist\win32-x64.tar.gz'
+      tarName: 'dist\windows-x64.tar.gz'
 
 
 cache:
@@ -41,7 +41,7 @@ test_script:
 
 after_test:
   - echo %cd%
-  - 7z a -tgzip %tarName% C:\stack\dist\elm-instrument.exe
+  - 7z a -ttar -so archive.tar C:\stack\dist\elm-instrument.exe | 7z a -si %tarName%
 
 
 artifacts:
