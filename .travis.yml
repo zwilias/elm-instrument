@@ -57,5 +57,5 @@ deploy:
   draft: true
   on:
     repo: zwilias/elm-instrument
-    tag: true
+    tags: true
     

@@ -50,10 +50,11 @@ artifacts:
 
 deploy:
   - provider: GitHub
+    tag: $(appveyor_repo_tag_name)
     artifact: "%tarName%"
     auth_token:
       secure: B76EIyeniWjavC3E7YcpwC61s0usacfLmWopYqNtKS8yleHjJVJ1J7lPJDWWzpAG
     draft: true
     on:
-      branch: master
+      appveyor_repo_tag: true
 
