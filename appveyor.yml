@@ -11,7 +11,7 @@ environment:
       tarName: 'dist\win32-ia32.tar.gz'
 
     - platform: x64
-      stackUrl: http://www.stackage.org/stack/window-x86_64
+      stackUrl: http://www.stackage.org/stack/windows-x86_64
       tarName: 'dist\win32-x64.tar.gz'
 
 
