@@ -39,9 +39,20 @@ test_script:
   - stack install --local-bin-path=dist
 
 
-before_deploy:
-  - 7z a -tgzip %tarName% 'dist\elm-instrument'
+after_test:
+  - 7z a -tgzip %tarName% 'dist\elm-instrument.exe'
+
 
 artifacts:
   - path: "%tarName%"
+
+
+deploy:
+  - provider: GitHub
+    artifact: "%tarName%"
+    auth_token:
+      secure: B76EIyeniWjavC3E7YcpwC61s0usacfLmWopYqNtKS8yleHjJVJ1J7lPJDWWzpAG
+    draft: true
+    on:
+      branch: master
 
