@@ -39,3 +39,4 @@ script:
 deploy:
   provider: script
   script: deploy.sh $BINTRAY_TOKEN
+  skip_cleanup: true
