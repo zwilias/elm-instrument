@@ -23,7 +23,7 @@ cache:
 before_test:
   # workaround for https://github.com/appveyor/ci/issues/1426
   - set PATH=%PATH%;C:\Program Files\Git\mingw64\bin
-  - curl -sS -ostack.zip -L --insecure ${stackUrl}
+  - curl -sS -ostack.zip -L --insecure %stackUrl%
   - 7z x stack.zip stack.exe
 
 
@@ -40,8 +40,8 @@ test_script:
 
 
 before_deploy:
-  - 7z a -tgzip ${tarName} 'dist\elm-instrument'
+  - 7z a -tgzip %tarName% 'dist\elm-instrument'
 
 artifacts:
-  - path: ${tarName}
+  - path: "%tarName%"
 
