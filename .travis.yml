@@ -44,7 +44,7 @@ script:
 
 before_deploy:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then strip $(stack path --local-install-root)/bin/elm-instrument; fi
-  - tar zcvf "${TRAVIS_OS_NAME}.tar.gz" -C $(stack path --local-install-root)/bin $(stack path --local-install-root)/bin/elm-instrument 
+  - tar zcvf "${TRAVIS_OS_NAME}-x64.tar.gz" -C $(stack path --local-install-root)/bin $(stack path --local-install-root)/bin/elm-instrument 
 
 
 deploy:
