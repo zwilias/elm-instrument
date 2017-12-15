@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE FlexibleInstances #-}
 module Coverage.Transformer where
 
 import           AST.Declaration      as Declaration
@@ -91,7 +90,7 @@ annotation toAnnotation moduleName body@(A region _) =
 annotationRef :: Region -> Expression.Expr
 annotationRef region = A region $ Expression.VarExpr $ Var.VarRef
   [AST.UppercaseIdentifier "Coverage"]
-  (AST.LowercaseIdentifier "annotation")
+  (AST.LowercaseIdentifier "track")
 
 
 annotationWithRegion
