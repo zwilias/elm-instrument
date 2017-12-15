@@ -1,7 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NamedFieldPuns #-}
 module Reporting.Region where
 
 import qualified Text.Parsec.Pos as Parsec
+import qualified Text.JSON as Json
 
 
 data Region = Region
@@ -42,3 +44,10 @@ toString (Region start end) =
     True ->
         "on line " ++ show (line end) ++ ", column "
         ++ show (column start) ++ " to " ++ show (column end)
+
+-- To JSON
+instance Json.JSON Position where
+  readJSON _ = Json.Error "Not implemented"
+  showJSON Position{line, column} =
+    Json.makeObj [ ("line", Json.showJSON line), ("column", Json.showJSON column)]
+

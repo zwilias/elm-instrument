@@ -28,6 +28,7 @@ import qualified ElmFormat.FileStore as FileStore
 import qualified ElmFormat.Filesystem as FS
 import qualified ElmFormat.Operation as Operation
 import qualified ElmFormat.Version
+import qualified Text.JSON as Json
 import qualified Reporting.Error.Syntax as Syntax
 import qualified Reporting.Result as Result
 
@@ -47,9 +48,9 @@ writeResult elmVersion destination inputFile inputText result =
     case result of
         Result.Result _ (Result.Ok modu) ->
             let
+                (transformed, info) = Transformer.transform modu
                 renderedText =
-                    modu
-                        |> Transformer.transform
+                    transformed
                         |> Render.render elmVersion
                 rendered =
                     renderedText
