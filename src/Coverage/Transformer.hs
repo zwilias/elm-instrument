@@ -20,7 +20,7 @@ import           Reporting.Annotation (Located (..))
 import           Reporting.Region
 
 
-transform :: M.Module -> (M.Module, Json.JSValue)
+transform :: M.Module -> (M.Module, (String, Json.JSValue))
 transform modul =
   let
     (comments, modulImports) =
@@ -54,10 +54,10 @@ transform modul =
     store :: AnnotationStore
     (updatedBody, store) = State.runState
       (mapM (annotate moduleName) (M.body modul))
-      (emptyStore moduleName)
+      emptyStore
   in
     ( modul { M.imports = (comments, updatedImports), M.body = updatedBody }
-    , storeToJson store
+    , ( moduleName, storeToJson store)
     )
 
 
@@ -370,7 +370,6 @@ data AnnotationStore = AnnotationStore
   { annotations :: [Annotation]
   , current     :: Int
   , stack       :: [Int]
-  , modul       :: String
   , count       :: Int64
   }
 
@@ -402,24 +401,19 @@ annotationToJson ann =
 
 
 storeToJson :: AnnotationStore -> Json.JSValue
-storeToJson AnnotationStore { annotations, modul } = Json.makeObj
-  [ ( "annotations"
-    , annotations |> List.reverse |> List.map annotationToJson |> Json.JSArray
-    )
-  , ("module", Json.showJSON modul)
-  ]
+storeToJson AnnotationStore { annotations } =
+  annotations |> List.reverse |> List.map annotationToJson |> Json.JSArray
 
 
 register :: Annotation -> AnnotationStore -> (Int64, AnnotationStore)
 register ann store =
-  (count store, store { annotations = ann : annotations store })
+  (count store, store { annotations = ann : annotations store, count = count store + 1 })
 
 
-emptyStore :: String -> AnnotationStore
-emptyStore moduleName = AnnotationStore
+emptyStore :: AnnotationStore
+emptyStore = AnnotationStore
   { annotations = []
   , current     = 1
   , stack       = []
-  , modul       = moduleName
   , count       = 0
   }
