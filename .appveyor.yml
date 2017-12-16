@@ -52,6 +52,7 @@ deploy:
   - provider: GitHub
     tag: $(appveyor_repo_tag_name)
     artifact: "%tarName%"
+    release: elm-instrument $(appveyor_repo_tag_name)
     auth_token:
       secure: B76EIyeniWjavC3E7YcpwC61s0usacfLmWopYqNtKS8yleHjJVJ1J7lPJDWWzpAG
     draft: true

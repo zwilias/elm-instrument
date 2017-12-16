@@ -54,6 +54,9 @@ deploy:
   skip_cleanup: true
   file: "${TRAVIS_OS_NAME}-x64.tar.gz"
   draft: true
+  name: elm-instrument $TRAVIS_TAG
+  tag_name: $TRAVIS_TAG
+  target_commitish: $TRAVIS_COMMIT
   on:
     repo: zwilias/elm-instrument
     tags: true
