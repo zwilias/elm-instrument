@@ -160,23 +160,23 @@ patternToName pat = case pat of
                 List.map (\(_, A _ p) -> patternToName p) commentedPatterns
                     |> unwords
         in
-            unwords [ctor, params]
+            "(" ++ unwords [ctor, params] ++ ")"
     Pattern.PatternParens (AST.Commented _ (A _ p) _) ->
         "(" ++ patternToName p ++ ")"
     Pattern.Tuple parts ->
-        "("
+        "( "
             ++ ( intercalate ", " $ List.map
                    (\(AST.Commented _ (A _ p) _) -> patternToName p)
                    parts
                )
-            ++ ")"
+            ++ " )"
     Pattern.Record identifiers ->
-        "{"
+        "{ "
             ++ ( intercalate ", " $ List.map
                    (\(AST.Commented _ (AST.LowercaseIdentifier p) _) -> p)
                    identifiers
                )
-            ++ "}"
+            ++ " }"
     Pattern.Alias ((A _ p), _) (_, AST.LowercaseIdentifier as) ->
         patternToName p ++ " as " ++ as
     _ -> ""
