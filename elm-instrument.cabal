@@ -147,6 +147,7 @@ executable elm-instrument
         elm-instrument
 
 test-Suite elm-format-tests
+
     type:
         exitcode-stdio-1.0
 
