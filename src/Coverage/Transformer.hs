@@ -54,7 +54,7 @@ transform modul =
                 |> List.map (\(AST.UppercaseIdentifier s) -> s)
                 |> intercalate "."
 
-        updatedBody :: [Decl]
+        updatedBody :: [TopLevelStructure Declaration]
         store :: AnnotationStore
         (updatedBody, store) = State.runState
             (mapM (annotate moduleName) (M.body modul))
@@ -65,11 +65,11 @@ transform modul =
         )
 
 
-annotate :: String -> Declaration.Decl -> State AnnotationStore Declaration.Decl
+annotate :: String -> Declaration.TopLevelStructure Declaration -> State AnnotationStore (Declaration.TopLevelStructure Declaration)
 annotate moduleName declaration' = case declaration' of
-    Declaration.Decl (A region declaration_) -> do
+    Declaration.Entry (A region declaration_) -> do
         declaration <- annotateDeclaration moduleName region declaration_
-        return $ Declaration.Decl $ A region declaration
+        return $ Declaration.Entry $ A region declaration
 
     _ -> return declaration'
 
