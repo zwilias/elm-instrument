@@ -4,6 +4,7 @@ module Parse.Declaration where
 import Text.Parsec ( (<|>), (<?>), choice, digit, optionMaybe, string, try )
 
 import AST.Declaration
+import Parse.Comments
 import qualified Parse.Expression as Expr
 import Parse.Helpers as Help
 import qualified Parse.Type as Type
@@ -12,12 +13,17 @@ import Parse.IParser
 import Parse.Whitespace
 
 
-declaration :: IParser AST.Declaration.Decl
+declaration :: IParser Declaration
 declaration =
-  choice
-    [ AST.Declaration.DocComment <$> docCommentAsMarkdown
-    , AST.Declaration.Decl <$> addLocation (typeDecl <|> infixDecl <|> port <|> definition)
-    ]
+    typeDecl <|> infixDecl <|> port <|> definition
+
+
+topLevelStructure :: IParser a -> IParser (TopLevelStructure a)
+topLevelStructure entry =
+    choice
+        [ DocComment <$> docCommentAsMarkdown
+        , Entry <$> addLocation entry
+        ]
 
 
 
@@ -52,19 +58,45 @@ typeDecl =
 
         Nothing ->
             do
-                tags <- pipeSep1 Type.tag <?> "a constructor for a union type"
+                tags_ <- pipeSep1 Type.tag <?> "a constructor for a union type"
                 return
                     AST.Declaration.Datatype
                         { nameWithArgs = Commented postType (name, args) preEquals
-                        , tags = exposedToOpen postEquals tags
+                        , tags = exposedToOpen postEquals tags_
                         }
 
 
 -- INFIX
 
+
 infixDecl :: IParser AST.Declaration.Declaration
 infixDecl =
-  expecting "an infix declaration" $
+    expecting "an infix declaration" $
+    choice
+        [ try infixDecl_0_16
+        , infixDecl_0_19
+        ]
+
+
+infixDecl_0_19 :: IParser AST.Declaration.Declaration
+infixDecl_0_19 =
+    let
+        assoc =
+            choice
+                [ string "right" >> return AST.Declaration.R
+                , string "non" >> return AST.Declaration.N
+                , string "left" >> return AST.Declaration.L
+                ]
+    in
+    AST.Declaration.Fixity_0_19
+        <$> (try (reserved "infix") *> preCommented assoc)
+        <*> (preCommented $ (\n -> read [n]) <$> digit)
+        <*> (commented symOpInParens)
+        <*> (equals *> preCommented lowVar)
+
+
+infixDecl_0_16 :: IParser AST.Declaration.Declaration
+infixDecl_0_16 =
   do  assoc <-
           choice
             [ try (reserved "infixl") >> return AST.Declaration.L

@@ -2,12 +2,14 @@ module
     --A
     Main
     {- A -} exposing
-        ( a
-        , b
-          --A
-        , --A
-          c
-        )
+    ( a
+    ,  b
+       --A
+
+    ,  --A
+       c
+
+    )
 
 
 foo =

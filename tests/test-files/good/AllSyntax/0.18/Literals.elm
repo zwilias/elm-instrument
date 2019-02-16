@@ -1,4 +1,4 @@
-module AllSyntax.Literals exposing (..)
+module AllSyntax.Literals exposing (boolean, char, escapedControlChars, escapedNonPrintChars, escapedSpecialChars, multilineString, multilineStringQuoteHandling, string, stringWithEscapedControlCharacters, stringWithEscapedNonPrintCharacters, stringWithSpecialEscapedCharacters, stringWithUnicodeCharacters, stringWithWhitespace, stringWithWindowsWorkaroundCharacters, unicodeChars, unit, whitespaceChars)
 
 
 unit =
@@ -6,34 +6,24 @@ unit =
 
 
 boolean =
-    ( True
+    [ True
     , False
-    )
+    ]
 
 
-int =
-    1
-
-
-hexadecimalInt =
-    ( 0x00
-    , 0xFF
-    , 0x07FF
-    , 0x00010000
-    , 0x0000000100000000
-    )
+integer =
+    [ 1
+    , 0x0F1A
+    , 0x7FFFFFFFFFFFFFFF
+    , 9223372036854775807
+    , 0x8000000000000000
+    , -9223372036854775808
+    ]
 
 
 float =
-    ( 2.0
-    , 0.01
-    )
-
-
-scientificNotationFloat =
-    ( 1.0e-2
-    , 9.11e23
-    )
+    [ 2.0
+    ]
 
 
 string =
@@ -49,10 +39,10 @@ stringWithSpecialEscapedCharacters =
 
 
 stringWithEscapedControlCharacters =
-    ( "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0D\x0E\x0F"
+    [ "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0D\x0E\x0F"
     , "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
     , "\x7F"
-    )
+    ]
 
 
 stringWithWindowsWorkaroundCharacters =

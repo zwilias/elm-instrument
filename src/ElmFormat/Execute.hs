@@ -10,21 +10,25 @@ import Elm.Utils ((|>))
 import Control.Monad.State
 import Control.Monad.Free
 import ElmFormat.Operation
+import ElmFormat.World
 import ElmVersion
 
 import qualified ElmFormat.FileStore as FileStore
+import qualified ElmFormat.FileWriter as FileWriter
+import qualified ElmFormat.InputConsole as InputConsole
+import qualified ElmFormat.OutputConsole as OutputConsole
 import qualified Messages.Formatter.HumanReadable as HumanReadable
 import qualified Messages.Formatter.Json as Json
 
 
-data Program opF state = Program
-    { init :: (IO (), state)
-    , step :: forall a. opF a -> StateT state IO a
-    , done :: state -> IO ()
+data Program m opF state = Program
+    { init :: (m (), state)
+    , step :: forall a. opF a -> StateT state m a
+    , done :: state -> m ()
     }
 
 
-run :: Program opF state -> Free opF a -> IO a
+run :: World m => Program m opF state -> Free opF a -> m a
 run program operations =
     do
         let Program init step done = program
@@ -39,23 +43,32 @@ run program operations =
 
 
 {-| Execute Operations in a fashion appropriate for interacting with humans. -}
-forHuman :: OperationF a -> IO a
-forHuman operation =
-    case operation of
-        InFileStore op -> FileStore.execute op
-        InInfoFormatter op -> HumanReadable.format op
-        DeprecatedIO io -> io
+forHuman :: World m => Bool -> Program m OperationF ()
+forHuman autoYes =
+    Program
+        { init = (return (), ())
+        , step = \operation ->
+              case operation of
+                  InFileStore op -> lift $ FileStore.execute op
+                  InInfoFormatter op -> lift $ HumanReadable.format autoYes op
+                  InInputConsole op -> lift $ InputConsole.execute op
+                  InOutputConsole op -> lift $ OutputConsole.execute op
+                  InFileWriter op -> lift $ FileWriter.execute op
+        , done = \() -> return ()
+        }
 
 
 {-| Execute Operations in a fashion appropriate for use by automated scripts. -}
-forMachine :: ElmVersion -> Program OperationF Bool
-forMachine elmVersion =
+forMachine :: World m => ElmVersion -> Bool -> Program m OperationF Bool
+forMachine elmVersion autoYes =
     Program
         { init = Json.init
         , step = \operation ->
             case operation of
                 InFileStore op -> lift $ FileStore.execute op
-                InInfoFormatter op -> Json.format elmVersion op
-                DeprecatedIO io -> lift io
+                InInfoFormatter op -> Json.format elmVersion autoYes op
+                InInputConsole op -> lift $ InputConsole.execute op
+                InOutputConsole op -> lift $ OutputConsole.execute op
+                InFileWriter op -> lift $ FileWriter.execute op
         , done = const Json.done
         }

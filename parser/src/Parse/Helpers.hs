@@ -7,7 +7,6 @@ import Data.Map.Strict hiding (foldl)
 import qualified Data.Maybe as Maybe
 import Text.Parsec hiding (newline, spaces, State)
 import Text.Parsec.Indent (indented, runIndent)
-import qualified Text.Parsec.Token as T
 
 import AST.V0_16
 import qualified AST.Expression
@@ -123,6 +122,11 @@ symOp =
       case op of
         "." -> notFollowedBy lower >> return (SymbolIdentifier op)
         _   -> return $ SymbolIdentifier op
+
+
+symOpInParens :: IParser SymbolIdentifier
+symOpInParens =
+    parens' symOp
 
 
 -- COMMON SYMBOLS
@@ -285,35 +289,36 @@ keyValue parseSep parseKey parseVal =
 
 separated :: IParser sep -> IParser e -> IParser (Either e (R.Region, (e,Maybe String), [(Comments, Comments, e, Maybe String)], Bool))
 separated sep expr' =
-  do  start <- getMyPosition
-      _ <- pushNewlineContext
-      t1 <- expr'
-      arrow <- optionMaybe $ try ((,) <$> restOfLine <*> whitespace <* sep)
-      case arrow of
-        Nothing ->
-            do  _ <- popNewlineContext
-                return $ Left t1
-        Just (eolT1, preArrow) ->
-            do  postArrow <- whitespace
-                t2 <- separated sep expr'
-                end <- getMyPosition
-                multiline <- popNewlineContext
-                case t2 of
-                    Right (_, (t2',eolT2), ts, _) ->
-                      return $ Right
-                        ( R.Region start end
-                        , (t1, eolT1)
-                        , (preArrow, postArrow, t2', eolT2):ts
-                        , multiline
-                        )
-                    Left t2' ->
-                      do
-                        eol <- restOfLine
-                        return $ Right
-                          ( R.Region start end
-                          , (t1, eolT1)
-                          , [(preArrow, postArrow, t2', eol)]
-                          , multiline)
+  let
+    subparser =
+      do  start <- getMyPosition
+          t1 <- expr'
+          arrow <- optionMaybe $ try ((,) <$> restOfLine <*> whitespace <* sep)
+          case arrow of
+            Nothing ->
+                return $ \_multiline -> Left t1
+            Just (eolT1, preArrow) ->
+                do  postArrow <- whitespace
+                    t2 <- separated sep expr'
+                    end <- getMyPosition
+                    case t2 of
+                        Right (_, (t2',eolT2), ts, _) ->
+                          return $ \multiline -> Right
+                            ( R.Region start end
+                            , (t1, eolT1)
+                            , (preArrow, postArrow, t2', eolT2):ts
+                            , multiline
+                            )
+                        Left t2' ->
+                          do
+                            eol <- restOfLine
+                            return $ \multiline -> Right
+                              ( R.Region start end
+                              , (t1, eolT1)
+                              , [(preArrow, postArrow, t2', eol)]
+                              , multiline)
+  in
+    (\(f, multiline) -> f $ multilineToBool multiline) <$> trackNewline subparser
 
 
 dotSep1 :: IParser a -> IParser [a]
@@ -361,13 +366,24 @@ betwixt a b c =
 
 
 surround :: Char -> Char -> String -> IParser (Comments -> Comments -> Bool -> a) -> IParser a
-surround a z name p = do
-  pushNewlineContext
-  _ <- char a
-  (pre, v, post) <- padded p
-  _ <- char z <?> unwords ["a closing", name, show z]
-  multiline <- popNewlineContext
-  return $ v pre post multiline
+surround a z name p =
+  let
+    -- subparser :: IParser (Bool -> a)
+    subparser = do
+      _ <- char a
+      (pre, v, post) <- padded p
+      _ <- char z <?> unwords ["a closing", name, show z]
+      return $ \multiline -> v pre post multiline
+    in
+      (\(f, multiline) -> f (multilineToBool multiline)) <$> trackNewline subparser
+
+
+-- TODO: push the Multiline type further up in the AST and get rid of this
+multilineToBool :: Multiline -> Bool
+multilineToBool multine =
+  case multine of
+    SplitAll -> True
+    JoinAll -> False
 
 
 braces :: IParser (Comments -> Comments -> Bool -> a) -> IParser a
@@ -536,45 +552,6 @@ closeShader builder =
     ]
 
 
-str :: IParser (String, Bool)
-str =
-  expecting "a string" $
-  do  (s, multi) <- choice [ multiStr, singleStr ]
-      result <- processAs T.stringLiteral . sandwich '\"' $ concat s
-      return (result, multi)
-  where
-    rawString quote insides =
-        quote >> manyTill insides quote
-
-    multiStr  =
-        do  result <- rawString (try (string "\"\"\"")) multilineStringChar
-            return (result, True)
-    singleStr =
-        do  result <- rawString (char '"') stringChar
-            return (result, False)
-
-    stringChar :: IParser String
-    stringChar = choice [ newlineChar, escaped '\"', (:[]) <$> satisfy (/= '\"') ]
-
-    multilineStringChar :: IParser String
-    multilineStringChar =
-        do noEnd
-           choice [ newlineChar, escaped '\"', expandQuote <$> anyChar ]
-        where
-          noEnd = notFollowedBy (string "\"\"\"")
-          expandQuote c = if c == '\"' then "\\\"" else [c]
-
-    newlineChar :: IParser String
-    newlineChar =
-        choice
-            [ char '\n' >> return "\\n"
-            , char '\r' >> choice
-                [ char '\n' >> return "\\n"
-                , return "\\r"
-                ]
-            ]
-
-
 sandwich :: Char -> String -> String
 sandwich delim s =
   delim : s ++ [delim]
@@ -588,46 +565,10 @@ escaped delim =
     return ['\\', c]
 
 
-chr :: IParser Char
-chr =
-    betwixt '\'' '\'' character <?> "a character"
-  where
-    nonQuote = satisfy (/='\'')
-
-    character =
-      do  c <- choice
-                [ escaped '\''
-                , (:) <$> char '\\' <*> many1 nonQuote
-                , (:[]) <$> nonQuote
-                ]
-
-          processAs T.charLiteral $ sandwich '\'' c
-
-
-processAs :: (T.GenTokenParser String u SourceM -> IParser a) -> String -> IParser a
+processAs :: IParser a -> String -> IParser a
 processAs processor s =
-    calloutParser s (processor lexer)
+    calloutParser s processor
   where
     calloutParser :: String -> IParser a -> IParser a
     calloutParser inp p =
       either (fail . show) return (iParse p inp)
-
-    lexer :: T.GenTokenParser String u SourceM
-    lexer = T.makeTokenParser elmDef
-
-    -- I don't know how many of these are necessary for charLiteral/stringLiteral
-    elmDef :: T.GenLanguageDef String u SourceM
-    elmDef =
-      T.LanguageDef
-        { T.commentStart    = "{-"
-        , T.commentEnd      = "-}"
-        , T.commentLine     = "--"
-        , T.nestedComments  = True
-        , T.identStart      = undefined
-        , T.identLetter     = undefined
-        , T.opStart         = undefined
-        , T.opLetter        = undefined
-        , T.reservedNames   = reserveds
-        , T.reservedOpNames = [":", "->", "|"]
-        , T.caseSensitive   = True
-        }

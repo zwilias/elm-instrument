@@ -1,4 +1,4 @@
-module AllSyntax.Expressions exposing (..)
+module AllSyntax.Expressions exposing (binary, caseStatement, emptyList, emptyRecord, functionApplication, functionApplicationMultiline, functionApplicationMultilineWithFirstArg, ifStatement, infixPipeLeft, infixPipeLeft2, lambda, lambdaWithMultilinePattern, letStatement, list, listWithCommentedOutItems, literal, operator, parens, record, recordAccess, recordAccessfunction, recordUpdate, recordUpdateWithCommentedOutFields, recordWithCommentedOutFields, tuple, tupleFunction, tupleWithCommentedOutItems, unary, unit, var)
 
 
 unit =
@@ -9,16 +9,12 @@ unit =
     ]
 
 
-literal =
-    ( 1
-    , 2.0
-    , "string"
-    , 'c'
-    )
-
-
 var x =
     x
+
+
+qualifiedVar =
+    Bar.Baz.foo
 
 
 operator =

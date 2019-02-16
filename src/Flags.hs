@@ -72,4 +72,3 @@ linesToDoc lineList =
 input :: Opt.Parser FilePath
 input =
     Opt.strArgument $ Opt.metavar "INPUT"
-

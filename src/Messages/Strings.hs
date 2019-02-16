@@ -27,7 +27,7 @@ showErrorMessage ErrorsHeading = "ERRORS"
 
 showErrorMessage (BadInputFiles filePaths) =
   unlines
-    [ "There was a problem reading one or more of the specified input files:"
+    [ "There was a problem reading one or more of the specified INPUT paths:"
     , ""
     , unlines $ map ((++) "    " . showInputMessage) filePaths
     , "Please check the given paths."
@@ -47,13 +47,15 @@ showErrorMessage OutputAndValidate =
     "Cannot use --output and --validate together"
 
 showErrorMessage (MustSpecifyVersionWithUpgrade elmVersion) =
-    "I can only upgrade code to the latest Elm version.  To make sure I'm doing what you expect, you must also specify --elm-version=" ++ show elmVersion ++ " when you use --upgrade."
+    "I can only upgrade code to specific Elm versions.  To make sure I'm doing what you expect, you must also specify --elm-version=" ++ show elmVersion ++ " when you use --upgrade."
 
+showErrorMessage NoInputs =
+    error "Error case NoInputs should be handled elsewhere.  Please report this issue at https://github.com/avh4/elm-format/issues"
 
 showInputMessage :: InputFileMessage -> String
 
 showInputMessage (FileDoesNotExist path) =
-    path ++ ": File does not exist"
+    path ++ ": No such file or directory"
 
 showInputMessage (NoElmFiles path) =
     path ++ ": Directory does not contain any *.elm files"

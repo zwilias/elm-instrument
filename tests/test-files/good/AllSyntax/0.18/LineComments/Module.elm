@@ -7,16 +7,19 @@ module
     --B
     --I
     exposing
-        ( --C
-          a
-          --D
-        , --E
-          b
-          --F
-        , --G
-          c
-          --H
-        )
+    (  --C
+       a
+       --D
+
+    ,  --E
+       b
+       --F
+
+    ,  --G
+       c
+       --H
+
+    )
 
 --J
 --K

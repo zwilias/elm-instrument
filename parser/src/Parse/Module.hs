@@ -1,4 +1,4 @@
-module Parse.Module (moduleDecl, elmModule) where
+module Parse.Module (moduleDecl, elmModule, topLevel) where
 
 import qualified Control.Applicative
 import Data.Map.Strict hiding (foldl, map)
@@ -26,7 +26,7 @@ elmModule =
           , (,) <$> addLocation (return Nothing) <*> return []
           ]
       (preImportComments, imports', postImportComments) <- imports
-      decls <- declarations
+      decls <- topLevel Decl.declaration
       trailingComments <-
           (++)
               <$> option [] freshLine
@@ -42,17 +42,17 @@ elmModule =
           ((map AST.Declaration.BodyComment postImportComments) ++ decls ++ (map AST.Declaration.BodyComment trailingComments))
 
 
-declarations :: IParser [AST.Declaration.Decl]
-declarations =
-  (++) <$> ((\x -> [x]) <$> Decl.declaration)
-      <*> (concat <$> many freshDef)
+topLevel :: IParser a -> IParser [AST.Declaration.TopLevelStructure a]
+topLevel entry =
+  (++) <$> option [] (((\x -> [x]) <$> Decl.topLevelStructure entry))
+      <*> (concat <$> many (freshDef entry))
 
 
-freshDef :: IParser [AST.Declaration.Decl]
-freshDef =
+freshDef :: IParser a -> IParser [AST.Declaration.TopLevelStructure a]
+freshDef entry =
     commitIf (freshLine >> (letter <|> char '_')) $
       do  comments <- freshLine
-          decl <- Decl.declaration
+          decl <- Decl.topLevelStructure entry
           return $ (map AST.Declaration.BodyComment comments) ++ [decl]
 
 
@@ -181,27 +181,37 @@ import' =
     exposing =
       do  preExposing <- try (whitespace <* reserved "exposing")
           postExposing <- whitespace
-          imports <- listing detailedListing
+          imports <-
+            choice
+              [ listing detailedListing
+              , listingWithoutParens
+              ]
           return (preExposing, (postExposing, imports))
 
 
 listing :: IParser (Comments -> Comments -> a) -> IParser (Var.Listing a)
 listing explicit =
-  expecting "a listing of values and types to expose, like (..)" $
-  do  _ <- try (char '(')
-      pushNewlineContext
-      pre <- whitespace
-      listing <-
-          choice
-            [ (\_ pre post _ -> (Var.OpenListing (Commented pre () post))) <$> string ".."
-            , (\x pre post sawNewline ->
-                (Var.ExplicitListing (x pre post) sawNewline))
-                  <$> explicit
-            ]
-      post <- whitespace
-      sawNewline <- popNewlineContext
-      _ <- char ')'
-      return $ listing pre post sawNewline
+  let
+    subparser = choice
+        [ (\_ pre post _ -> (Var.OpenListing (Commented pre () post))) <$> string ".."
+        , (\x pre post sawNewline -> (Var.ExplicitListing (x pre post) sawNewline)) <$>
+            explicit
+        ]
+  in
+    expecting "a listing of values and types to expose, like (..)" $
+    do  _ <- try (char '(')
+        ((pre, listing, post), multiline) <- trackNewline ((,,) <$> whitespace <*> subparser <*> whitespace)
+        _ <- char ')'
+        return $ listing pre post $ multilineToBool multiline
+
+
+listingWithoutParens :: IParser (Var.Listing Module.DetailedListing)
+listingWithoutParens =
+  expecting "a listing of values and types to expose, but with missing parentheses" $
+  choice
+    [ (\_ -> (Var.OpenListing (Commented [] () []))) <$> string ".."
+    , (\x -> (Var.ExplicitListing (x [] []) False)) <$> detailedListing
+    ]
 
 
 commentedSet :: Ord a => IParser a -> IParser (Comments -> Comments -> Var.CommentedMap a ())

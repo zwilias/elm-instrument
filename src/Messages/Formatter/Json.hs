@@ -3,32 +3,39 @@ module Messages.Formatter.Json (format, init, done) where
 import qualified ElmFormat.Version
 import qualified Text.JSON as Json
 
-import Prelude hiding (init)
+import Prelude hiding (init, putStr, putStrLn)
 import Control.Monad.State
 import Messages.Formatter.Format
 import Messages.Types
 import ElmVersion (ElmVersion)
+import ElmFormat.World
 
 
-format :: ElmVersion -> InfoFormatterF a -> StateT Bool IO a
-format elmVersion infoFormatter =
+format :: World m => ElmVersion -> Bool -> InfoFormatterF a -> StateT Bool m a
+format elmVersion autoYes infoFormatter =
     case infoFormatter of
         OnInfo info next ->
             showInfo elmVersion info next
 
-init :: (IO (), Bool)
+        Approve _prompt next ->
+            case autoYes of
+                True -> return (next True)
+                False -> return (next False)
+
+
+init :: World m => (m (), Bool)
 init =
     (putStr "[", False)
 
 
-done :: IO ()
+done :: World m => m ()
 done =
     putStrLn "]"
 
 
-showInfo :: ElmVersion -> InfoMessage -> a -> StateT Bool IO a
+showInfo :: World m => ElmVersion -> InfoMessage -> a -> StateT Bool m a
 
-showInfo _ (ProcessingFiles _) next =
+showInfo _ (ProcessingFile _) next =
     return next
 
 showInfo elmVersion (FileWouldChange file) next =
@@ -40,7 +47,7 @@ showInfo _ (ParseError inputFile _ _) next =
     json next inputFile "Error parsing the file"
 
 
-json :: a -> FilePath -> String -> StateT Bool IO a
+json :: World m => a -> FilePath -> String -> StateT Bool m a
 json next file message =
     do
         printComma <- get

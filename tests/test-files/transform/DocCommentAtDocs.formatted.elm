@@ -1,10 +1,16 @@
-module DocCommentAtDocs exposing (x, y, z)
+module DocCommentAtDocs exposing
+    ( x
+    , y
+    , z
+    , T(..)
+    )
 
 {-|
 
 @docs x
 @docs y
 @docs z
+@docs T
 
 @docs a, b, c
 @docs d
