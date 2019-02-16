@@ -44,13 +44,13 @@ script:
 
 before_deploy:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then strip $(stack path --local-install-root)/bin/elm-instrument; fi
-  - tar zcvf "${TRAVIS_OS_NAME}-x64.tar.gz" -C $(stack path --local-install-root)/bin elm-instrument 
+  - tar zcvf "${TRAVIS_OS_NAME}-x64.tar.gz" -C $(stack path --local-install-root)/bin elm-instrument
 
 
 deploy:
   provider: releases
   api_key:
-    secure: ZMf3BRr91zTYRKiZArCBJ9lyJG2W33LKM25tlvSpMDi2kBSUqvpYyRnZKiod1eQJ8O2Av8bRPE2fc4stJMfRxsqVE0U5G1I6Md9UDPVxSAYq1Jfr9yTqIfHEOY+P9ePFo2wOqsMEqpWppkaSuE2WcW61YtN32GeXaizuOKE1Fz+j6wY8HvOcAH9Rf29SI8wZhCTp8tTxvQkYy9ICpbZMWZNaJVrsmHpO7Ob0Yy5Y93QQGnvgPrSGkYu0p0hgec45LGh1UucKb0i/D6to8+Fun2Md4Z08DoBJf8bOnJjNtDv06vviq13x20mm0/zcBELy/PkpducgqWtvZ+inJ4+xcEGTn1qD968EfhqAijpcXfLDHLpQ5ooss7XTDb2sWcdmC5eE/dzCkUE0KUnIPJjxy/XEPHX8xrhsHueng0PzoeN7Iom3ZLOqEwcl6L6WldULasSOf/Cl/t8Yy+zYpVLJI91qz6RRhWAbRsTgDuM9yyMlwZmiv2WaalXDzLP8NqHZItmW7WngYb0hVFD0w/ly4pTsK+0VJ9HlCJD8RM7bESgrj61YNdrkLTwG+UkumIpCbgvDnmP6nTus86a5T2k4bgBIT2kA77xi4bUHJbF0ba3JiaK0ZZ5OzckH/b7zHlpsqAR+S5eeEnWiUvXH/THRELAE/JYjjbGFYUEEPQIf0/Y=
+    secure: WpH0YFrIM6/x+MHoyTPJXeE7o0zMLC5VTSbyfi+SitDMQr4/lId4c9mtO2L89ST4yJPTzbkhJP7lgogsO+l0DIQ+XT8gcENM1Ma7VOoFpIjihBmYIWmOKQNawrNPnpXM/OmfCeNlh6UYTzRubLcxSOjiuItf3NWNIkU8EIbwDa+kk5jvTgBvHW6ibJ6d84ZWhSIaul2SB1nInso0YMs4esauITdvUcBZSdSQUoZtCPwi4LrffNiqO2NI4Wk5TgtQKfCZUPTl2aFKTiqD+5kxgYfvkET1gcWX7LHouW+b2sWf4hEBVS6FVJABX2AXG4eyuL+UBDKf4RgZmceCqAs10+iOEikjK1KQdhGSbPu4bPm6aU1BlUPkev4Dn3ngWXlaxB8flT3qGk8lKdYIX55UfONc8pfnBGk1C4Udn+FRfAD9LwuQoZljGR2jNs5V1NlpMABlP4J2oXhS9BBjttOz2Iz0JwFxULIjul6azzbz93DnWITtq6BcsKakiPVjpwVso7fCiCZiZJM53bflsQ41Av5Xpav21jfVOfg842bYe2kipBBPjpHiXf1eoZBPKKgE2/qBaQWFBchFkPuGzNnzrBEITJkNtU1Tb/h/wBvN0Lmtq/P9ZhA81l/zTNF+3PaHuhgE4T+8fG+x68FHdEuUyWyhFWzmCNxmkoia7BhcPJk=
   skip_cleanup: true
   file: "${TRAVIS_OS_NAME}-x64.tar.gz"
   draft: true
@@ -60,4 +60,3 @@ deploy:
   on:
     repo: zwilias/elm-instrument
     tags: true
-    

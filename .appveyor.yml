@@ -4,7 +4,7 @@ build: off
 environment:
   global:
     STACK_ROOT: 'c:\sr'
-    
+
   matrix:
     - platform: x86
       stackUrl: http://www.stackage.org/stack/windows-i386
@@ -54,8 +54,7 @@ deploy:
     artifact: "%tarName%"
     release: elm-instrument $(appveyor_repo_tag_name)
     auth_token:
-      secure: B76EIyeniWjavC3E7YcpwC61s0usacfLmWopYqNtKS8yleHjJVJ1J7lPJDWWzpAG
+      secure: vbKtXK4i2TbaFokPa6eFBAWFB+3bciPOJJJu+f6JFIIgdI4u6bz6y7RgL0oww9M7
     draft: true
     on:
       appveyor_repo_tag: true
-
