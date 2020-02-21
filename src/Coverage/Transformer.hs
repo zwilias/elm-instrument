@@ -17,11 +17,12 @@ import qualified Data.Map.Strict      as Map
 import           Elm.Utils            ((|>))
 import           Reporting.Annotation (Located (..))
 import           Reporting.Region
+import           System.FilePath
 import qualified Text.JSON            as Json
 
 
-transform :: M.Module -> (M.Module, (String, Json.JSValue))
-transform modul =
+transform :: M.Module -> FilePath -> (M.Module, (String, Json.JSValue))
+transform modul filePath =
     let
         (comments, modulImports) =
             M.imports modul :: ( AST.Comments
@@ -54,14 +55,29 @@ transform modul =
                 |> List.map (\(AST.UppercaseIdentifier s) -> s)
                 |> intercalate "."
 
+        dropEnd :: Int -> [a] -> [a]
+        dropEnd i xs = reverse . drop i . reverse $ xs
+
+        fileRootDirPath :: FilePath
+        fileRootDirPath =
+            filePath
+                |> splitDirectories
+                |> drop 2 -- .coverage/instrumented/
+                |> dropEnd (length moduleName_)
+                |> joinPath
+
+        moduleNameWithFilePath :: String
+        moduleNameWithFilePath =
+            fileRootDirPath </> moduleName
+
         updatedBody :: [TopLevelStructure Declaration]
         store :: AnnotationStore
         (updatedBody, store) = State.runState
-            (mapM (annotate moduleName) (M.body modul))
+            (mapM (annotate moduleNameWithFilePath) (M.body modul))
             emptyStore
     in
         ( modul { M.imports = (comments, updatedImports), M.body = updatedBody }
-        , (moduleName, storeToJson store)
+        , (moduleNameWithFilePath, storeToJson store)
         )
 
 
