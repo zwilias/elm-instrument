@@ -1,7 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
 module ElmFormat.Execute (forHuman, forMachine, run) where
 
-{-| This module provides executors that can take streams of Operations and
+{- This module provides executors that can take streams of Operations and
 perform IO.
 -}
 
