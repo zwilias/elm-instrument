@@ -183,7 +183,7 @@ format elmVersion (inputFile, inputText) =
     case parseModule (inputFile, inputText) of
         Right modu ->
             let
-                (transformed, info) = Transformer.transform modu
+                (transformed, info) = Transformer.transform modu inputFile
                 outputText = Render.render elmVersion transformed
             in
             Right $ Res inputFile info outputText
