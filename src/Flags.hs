@@ -26,7 +26,7 @@ usage :: String -> String -> String
 usage progName version =
     fst $
     Opt.renderFailure
-        (Opt.parserFailure preferences (parser version) Opt.ShowHelpText mempty)
+        (Opt.parserFailure preferences (parser version) (Opt.ShowHelpText Nothing) mempty)
         progName
 
 
@@ -47,7 +47,7 @@ showHelpText elmFormatVersion = Opt.Failure $
     Opt.parserFailure
         preferences
         (parser elmFormatVersion)
-        Opt.ShowHelpText
+        (Opt.ShowHelpText Nothing)
         mempty
 
 
